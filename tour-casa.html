@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tour Virtual - Casa</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css">
+<script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; font-family: system-ui, sans-serif; background: #111; }
+  #panorama { width: 100%; height: 100%; }
+  #topbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 20px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.65), transparent);
+    color: #fff; pointer-events: none;
+  }
+  #topbar h1 { font-size: 16px; font-weight: 600; letter-spacing: 0.3px; }
+  #topbar .sub { font-size: 12px; opacity: 0.7; }
+  #rooms {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+    display: flex; gap: 8px; overflow-x: auto;
+    padding: 14px 16px;
+    background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+  }
+  #rooms button {
+    flex: 0 0 auto;
+    border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(20,20,20,0.6);
+    color: #eee; padding: 8px 16px; border-radius: 999px;
+    font-size: 13px; cursor: pointer; backdrop-filter: blur(6px);
+    transition: all 0.15s; white-space: nowrap;
+  }
+  #rooms button:hover { background: rgba(255,255,255,0.15); }
+  #rooms button.active { background: #4f8cff; border-color: #4f8cff; color: #fff; }
+  .arrow-hotspot {
+    width: 44px; height: 44px;
+    background: rgba(79,140,255,0.9);
+    border: 2px solid #fff; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    animation: pulse 2s infinite; transition: transform 0.15s;
+  }
+  .arrow-hotspot:hover { transform: scale(1.15); }
+  .arrow-hotspot svg { width: 24px; height: 24px; fill: #fff; }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 2px 10px rgba(0,0,0,0.4), 0 0 0 0 rgba(79,140,255,0.5); }
+    50% { box-shadow: 0 2px 10px rgba(0,0,0,0.4), 0 0 0 12px rgba(79,140,255,0); }
+  }
+  .hotspot-label {
+    position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.75); color: #fff; padding: 3px 10px;
+    border-radius: 6px; font-size: 12px; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div>
+    <h1 id="room-title">Cargando...</h1>
+    <div class="sub">Tour virtual de la casa</div>
+  </div>
+</div>
+
+<div id="panorama"></div>
+<div id="rooms"></div>
+
+<script>
+/* =========================================================================
+   CONFIGURACION
+   -------------------------------------------------------------------------
+   FOLDER  = carpeta donde estan las fotos (relativa al HTML).
+   PHOTOS  = lista de fotos EN EL ORDEN del recorrido.
+             - "file"  : nombre del archivo dentro de FOLDER
+             - "title" : nombre lindo del ambiente (editalo a gusto)
+
+   El script conecta cada foto con la siguiente y la anterior
+   automaticamente (flechas "Siguiente" / "Anterior").
+   ========================================================================= */
+
+const FOLDER = "HDRI";
+
+const PHOTOS = [
+  { file: "IMG_20260612_174437_751.JPG", title: "Sala 1" },
+  { file: "IMG_20260612_174444_081.JPG", title: "Sala 2" },
+  { file: "IMG_20260612_174450_107.JPG", title: "Sala 3" },
+  { file: "IMG_20260612_174456_399.JPG", title: "Sala 4" },
+  { file: "IMG_20260612_174506_838.JPG", title: "Sala 5" },
+  { file: "IMG_20260612_174515_430.JPG", title: "Sala 6" },
+  { file: "IMG_20260612_174523_884.JPG", title: "Sala 7" },
+  { file: "IMG_20260612_174531_948.JPG", title: "Sala 8" },
+  { file: "IMG_20260612_174539_400.JPG", title: "Sala 9" },
+  { file: "IMG_20260612_174546_711.JPG", title: "Sala 10" },
+  { file: "IMG_20260612_174554_404.JPG", title: "Sala 11" },
+  { file: "IMG_20260612_174602_204.JPG", title: "Sala 12" },
+  { file: "IMG_20260612_174608_060.JPG", title: "Sala 13" },
+  { file: "IMG_20260612_174612_960.JPG", title: "Sala 14" },
+  { file: "IMG_20260612_174617_822.JPG", title: "Sala 15" },
+  { file: "IMG_20260612_174624_441.JPG", title: "Sala 16" },
+  { file: "IMG_20260612_174630_868.JPG", title: "Sala 17" },
+  { file: "IMG_20260612_174637_041.JPG", title: "Sala 18" },
+  { file: "IMG_20260612_174643_679.JPG", title: "Sala 19" },
+  { file: "IMG_20260612_174650_260.JPG", title: "Sala 20" }
+];
+
+/* CALIBRACION (opcional) -------------------------------------------------
+   Por defecto la flecha "Siguiente" apunta a yaw 0 y "Anterior" a 180.
+   Para mover flechas de una foto puntual, agrega su indice (empieza en 0):
+     const TWEAK = {
+       0: { next: { yaw: 40, pitch: -8 } },
+       3: { prev: { yaw: 150, pitch: -5 }, next: { yaw: -30, pitch: -10 } }
+     };
+   ----------------------------------------------------------------------- */
+const TWEAK = {};
+const DEFAULT_NEXT = { yaw: 0,   pitch: -8 };
+const DEFAULT_PREV = { yaw: 180, pitch: -8 };
+
+/* ----- de aca para abajo no hace falta tocar nada ----- */
+const arrowSvg = '<svg viewBox="0 0 24 24"><path d="M12 4l-1.4 1.4L16.2 11H4v2h12.2l-5.6 5.6L12 20l8-8z" transform="rotate(-90 12 12)"/></svg>';
+const sid = i => "scene_" + i;
+
+function buildScenes() {
+  const out = {};
+  PHOTOS.forEach((p, i) => {
+    const hs = [];
+    const tw = TWEAK[i] || {};
+    if (i < PHOTOS.length - 1) {
+      const pos = tw.next || DEFAULT_NEXT;
+      hs.push(makeHotspot(i + 1, "Siguiente: " + PHOTOS[i + 1].title, pos));
+    }
+    if (i > 0) {
+      const pos = tw.prev || DEFAULT_PREV;
+      hs.push(makeHotspot(i - 1, "Anterior: " + PHOTOS[i - 1].title, pos));
+    }
+    out[sid(i)] = {
+      type: "equirectangular",
+      panorama: FOLDER + "/" + p.file,
+      autoLoad: i === 0,
+      hotSpots: hs
+    };
+  });
+  return out;
+}
+
+function makeHotspot(targetIndex, text, pos) {
+  return {
+    pitch: pos.pitch, yaw: pos.yaw,
+    cssClass: "arrow-hotspot",
+    createTooltipFunc: hotspotTooltip,
+    createTooltipArgs: text,
+    clickHandlerFunc: () => goTo(targetIndex)
+  };
+}
+
+function hotspotTooltip(div, text) {
+  div.innerHTML = arrowSvg;
+  const label = document.createElement("span");
+  label.className = "hotspot-label";
+  label.textContent = text;
+  div.appendChild(label);
+}
+
+const viewer = pannellum.viewer("panorama", {
+  default: { firstScene: sid(0), sceneFadeDuration: 600, autoRotate: 0 },
+  scenes: buildScenes()
+});
+
+function goTo(i) { viewer.loadScene(sid(i)); updateUI(i); }
+
+function updateUI(i) {
+  document.getElementById("room-title").textContent =
+    PHOTOS[i].title + "  (" + (i + 1) + "/" + PHOTOS.length + ")";
+  document.querySelectorAll("#rooms button").forEach(b =>
+    b.classList.toggle("active", +b.dataset.i === i));
+  const active = document.querySelector("#rooms button.active");
+  if (active) active.scrollIntoView({ inline: "center", behavior: "smooth" });
+}
+
+const roomsDiv = document.getElementById("rooms");
+PHOTOS.forEach((p, i) => {
+  const b = document.createElement("button");
+  b.textContent = p.title;
+  b.dataset.i = i;
+  b.onclick = () => goTo(i);
+  roomsDiv.appendChild(b);
+});
+
+viewer.on("load", () => {
+  const i = +viewer.getScene().replace("scene_", "");
+  updateUI(i);
+});
+updateUI(0);
+
+/* AYUDA PARA CALIBRAR FLECHAS:
+   Descomenta esto, recarga, y haz clic donde quieres una flecha.
+   En la consola (F12) veras pitch y yaw para copiar al TWEAK.
+viewer.on('mousedown', e => {
+  const c = viewer.mouseEventToCoords(e);
+  console.log('pitch:', c[0].toFixed(1), ' yaw:', c[1].toFixed(1));
+});
+*/
+</script>
+</body>
+</html>
